@@ -7,17 +7,17 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: writea
 
 jobs:
   fetch:
     runs-on: ubuntu-latest
 
     steps:
+      # Check out the branch that contains the script (master / default branch).
+      # The generated chmi_forecast.json is then pushed to aladin-data separately.
       - uses: actions/checkout@v4
         with:
-          ref: aladin-data
-          # Create the branch if it doesn't exist yet
           fetch-depth: 0
 
       - name: Set up Python
@@ -31,10 +31,23 @@ jobs:
       - name: Run ALADIN pre-processor
         run: python .github/scripts/fetch_aladin.py
 
-      - name: Commit and push chmi_forecast.json to aladin-data branch
+      - name: Publish chmi_forecast.json to aladin-data branch
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Save generated file before switching branches
+          cp chmi_forecast.json /tmp/chmi_forecast.json
+
+          # Switch to or create the aladin-data branch
+          if git fetch origin aladin-data 2>/dev/null; then
+            git checkout aladin-data
+          else
+            git checkout --orphan aladin-data
+            git rm -rf . --quiet 2>/dev/null || true
+          fi
+
+          cp /tmp/chmi_forecast.json chmi_forecast.json
           git add chmi_forecast.json
           git diff --cached --quiet && echo "No changes, skipping commit" && exit 0
           git commit -m "Update ALADIN forecast $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
