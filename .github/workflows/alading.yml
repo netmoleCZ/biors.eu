@@ -29,7 +29,7 @@ jobs:
         run: pip install eccodes numpy scipy requests
 
       - name: Run ALADIN pre-processor
-        run: python .github/scripts/fetch_aladin.py
+        run: python .github/workflows/scripts/fetch_aladin.py
 
       - name: Commit and push chmi_forecast.json to aladin-data branch
         run: |
