@@ -38,15 +38,27 @@ RUN_HOURS = [0, 6, 12, 18]
 
 
 def latest_run(now: datetime) -> tuple[datetime, int]:
-    """Return (run_date, run_hour) for the most recent available run."""
-    # Runs are available about 2.5 h after nominal time; try runs up to 6 h back
-    for delta_hours in range(0, 9):
+    """Return (run_dt, run_hour) for the most recent run actually present on the server.
+
+    Probes with HEAD requests rather than calculating expected availability time —
+    observed CHMI publication lag is 3–5 h, not the 2 h assumed in the plan.
+    Checks up to the last 48 h of candidate runs (8 runs × 6 h apart).
+    """
+    for delta_hours in range(0, 48, 6):
         candidate = now - timedelta(hours=delta_hours)
         for rh in sorted(RUN_HOURS, reverse=True):
             run_dt = candidate.replace(hour=rh, minute=0, second=0, microsecond=0)
-            if run_dt <= now - timedelta(hours=2):
-                return run_dt, rh
-    raise RuntimeError("No recent ALADIN run found")
+            if run_dt > now:
+                continue
+            probe_url = build_url(run_dt, "CLSTEMPERATURE")
+            try:
+                r = requests.head(probe_url, timeout=10, allow_redirects=True)
+                if r.status_code == 200:
+                    print(f"  Found run: {run_dt.strftime('%Y-%m-%dT%H:%M:%SZ')} (HTTP 200)", flush=True)
+                    return run_dt, rh
+            except requests.RequestException:
+                continue
+    raise RuntimeError("No ALADIN run found in last 48 h")
 
 
 def build_url(run_dt: datetime, var_fragment: str) -> str:
