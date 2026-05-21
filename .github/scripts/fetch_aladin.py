@@ -19,8 +19,8 @@ import numpy as np
 import requests
 from scipy.spatial import cKDTree
 
-STATION_LIST_URL = (
-    "https://opendata.chmi.cz/meteorology/weather/recent/data/metadata_sta.json"
+STATION_METADATA_BASE = (
+    "https://opendata.chmi.cz/meteorology/climate/now/metadata/meta1-"
 )
 
 BASE_URL = "https://opendata.chmi.cz/meteorology/weather/nwp_aladin/CZ_1km"
@@ -103,17 +103,36 @@ def read_grib_messages(grib_bytes: bytes) -> list[dict]:
 
 
 def fetch_station_list() -> list[dict]:
-    """Return [{id, lat, lon}, ...] for all active CHMI stations."""
+    """Return [{id, lat, lon}, ...] for all CHMI stations.
+
+    URL: meteorology/climate/now/metadata/meta1-{YYYYMMDD}.json
+    Structure: d['data']['data']['header'] = 'WSI,GH_ID,FULL_NAME,GEOGR1,GEOGR2,ELEVATION,BEGIN_DATE'
+               d['data']['data']['values'] = [[wsi, gh_id, name, lon, lat, elev, begin], ...]
+    GEOGR1 = longitude, GEOGR2 = latitude.
+    Retries up to 3 days back in case today's file is not yet published.
+    """
     print("  Fetching CHMI station metadata …", flush=True)
-    r = requests.get(STATION_LIST_URL, timeout=30)
-    r.raise_for_status()
-    raw = r.json()
+    today = datetime.now(timezone.utc)
+    for delta in range(3):
+        date_str = (today - timedelta(days=delta)).strftime("%Y%m%d")
+        url = f"{STATION_METADATA_BASE}{date_str}.json"
+        r = requests.get(url, timeout=30)
+        if r.status_code == 200:
+            break
+    else:
+        raise RuntimeError("CHMI station metadata unavailable for last 3 days")
+
+    inner = r.json()["data"]["data"]
+    header = [h.strip() for h in inner["header"].split(",")]
+    idx_wsi   = header.index("WSI")
+    idx_lon   = header.index("GEOGR1")
+    idx_lat   = header.index("GEOGR2")
 
     stations = []
-    for entry in raw.get("data", {}).get("stations", []):
-        wsi = entry.get("wsi") or entry.get("id")
-        lat = entry.get("lat")
-        lon = entry.get("lon")
+    for row in inner["values"]:
+        wsi = row[idx_wsi]
+        lon = row[idx_lon]
+        lat = row[idx_lat]
         if wsi and lat is not None and lon is not None:
             stations.append({"id": str(wsi), "lat": float(lat), "lon": float(lon)})
     return stations
