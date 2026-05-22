@@ -38,6 +38,7 @@ jobs:
 
           # Save generated file before switching branches
           cp chmi_forecast.json /tmp/chmi_forecast.json
+          rm chmi_forecast.json
 
           # Switch to or create the aladin-data branch
           if git fetch origin aladin-data 2>/dev/null; then
