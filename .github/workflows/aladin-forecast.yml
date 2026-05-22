@@ -36,20 +36,19 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Save generated file before switching branches
-          cp chmi_forecast.json /tmp/chmi_forecast.json
-          rm chmi_forecast.json
+          git fetch origin aladin-data 2>/dev/null || true
 
-          # Switch to or create the aladin-data branch
-          if git fetch origin aladin-data 2>/dev/null; then
-            git checkout aladin-data
+          # Use a worktree so we never need to switch branches in the main checkout
+          if git show-ref --verify --quiet refs/remotes/origin/aladin-data; then
+            git worktree add /tmp/aladin-data origin/aladin-data
           else
-            git checkout --orphan aladin-data
-            git rm -rf . --quiet 2>/dev/null || true
+            git worktree add --orphan -b aladin-data /tmp/aladin-data
           fi
 
-          cp /tmp/chmi_forecast.json chmi_forecast.json
+          cp chmi_forecast.json /tmp/aladin-data/chmi_forecast.json
+
+          cd /tmp/aladin-data
           git add chmi_forecast.json
           git diff --cached --quiet && echo "No changes, skipping commit" && exit 0
           git commit -m "Update ALADIN forecast $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-          git push origin aladin-data
+          git push origin HEAD:aladin-data
