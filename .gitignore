@@ -1,0 +1,4 @@
+rohlik-dashboard/.env
+rohlik-dashboard/data/
+__pycache__/
+*.pyc
